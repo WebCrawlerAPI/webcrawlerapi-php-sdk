@@ -1,0 +1,36 @@
+{
+    "name": "webcrawlerapi/sdk",
+    "description": "A PHP SDK for WebCrawler API - turn website into data",
+    "type": "library",
+    "version": "1.0.0",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Andrew"
+        }
+    ],
+    "require": {
+        "php": ">=8.0",
+        "guzzlehttp/guzzle": "^7.0",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "WebCrawlerAPI\\": "src/"
+        }
+    },
+    "minimum-stability": "stable",
+    "keywords": [
+        "webcrawler",
+        "api",
+        "sdk",
+        "crawler",
+        "scraper",
+        "webcrawlerapi",
+        "llm",
+        "data",
+        "website",
+        "rag"
+    ],
+    "homepage": "https://github.com/webcrawlerapi/webcrawlerapi-php-sdk"
+} 
