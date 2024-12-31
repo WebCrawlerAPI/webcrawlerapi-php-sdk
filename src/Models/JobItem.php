@@ -91,7 +91,7 @@ class JobItem
                 'Accept-Encoding' => 'gzip, deflate, br',
                 'Accept' => '*/*'
             ],
-            'decode_content' => true
+            'decode_content' => false
         ]);
         $response = $client->get($contentUrl);
         $this->content = $response->getBody()->getContents();
