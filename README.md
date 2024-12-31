@@ -6,7 +6,9 @@
 
 A PHP SDK for interacting with the WebCrawlerAPI - a powerful web crawling and scraping service.
 
-## In order to use the API you have to get an API key from [WebCrawlerAPI](https://dash.webcrawlerapi.com/access)
+> In order to use the API you have to get an API key from [WebCrawlerAPI](https://dash.webcrawlerapi.com/access)
+
+Read documentation at [WebCrawlerAPI Docs](https://webcrawlerapi.com/docs) for more information.
 
 ## Requirements
 
