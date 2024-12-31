@@ -1,8 +1,8 @@
 # WebCrawler API PHP SDK
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/webcrawlerapi-php-sdk)
-[![Total Downloads](https://img.shields.io/packagist/dt/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/webcrawlerapi-php-sdk)
-[![License](https://img.shields.io/packagist/l/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/webcrawlerapi-php-sdk)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
+[![Total Downloads](https://img.shields.io/packagist/dt/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
+[![License](https://img.shields.io/packagist/l/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
 
 A PHP SDK for interacting with the WebCrawlerAPI - a powerful web crawling and scraping service.
 
