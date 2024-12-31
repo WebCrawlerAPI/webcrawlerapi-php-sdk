@@ -86,7 +86,13 @@ class JobItem
             return null;
         }
 
-        $client = new Client();
+        $client = new Client([
+            'headers' => [
+                'Accept-Encoding' => 'gzip, deflate, br',
+                'Accept' => '*/*'
+            ],
+            'decode_content' => true
+        ]);
         $response = $client->get($contentUrl);
         $this->content = $response->getBody()->getContents();
 
