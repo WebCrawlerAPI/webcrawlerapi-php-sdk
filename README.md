@@ -1,8 +1,8 @@
 # WebCrawler API PHP SDK
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
-[![Total Downloads](https://img.shields.io/packagist/dt/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
-[![License](https://img.shields.io/packagist/l/webcrawlerapi/webcrawlerapi-php-sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/webcrawlerapi/sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
+[![Total Downloads](https://img.shields.io/packagist/dt/webcrawlerapi/sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
+[![License](https://img.shields.io/packagist/l/webcrawlerapi/sdk.svg?style=flat-square)](https://packagist.org/packages/webcrawlerapi/sdk)
 
 A PHP SDK for interacting with the WebCrawlerAPI - a powerful web crawling and scraping service.
 
@@ -22,7 +22,7 @@ Read documentation at [WebCrawlerAPI Docs](https://webcrawlerapi.com/docs) for m
 You can install the package via composer:
 
 ```bash
-composer require webcrawlerapi/webcrawlerapi-php-sdk
+composer require webcrawlerapi/sdk
 ```
 
 ## Usage
