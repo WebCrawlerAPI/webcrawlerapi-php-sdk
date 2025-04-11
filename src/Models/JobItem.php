@@ -20,6 +20,7 @@ class JobItem
     public int $cost;
     public string $referredUrl;
     public string $lastError;
+    public ?string $errorCode;
     public ?string $rawContentUrl;
     public ?string $cleanedContentUrl;
     public ?string $markdownContentUrl;
@@ -41,6 +42,7 @@ class JobItem
         $this->cost = $data['cost'];
         $this->referredUrl = $data['referred_url'];
         $this->lastError = $data['last_error'];
+        $this->errorCode = $data['error_code'] ?? null;
         $this->rawContentUrl = $data['raw_content_url'] ?? null;
         $this->cleanedContentUrl = $data['cleaned_content_url'] ?? null;
         $this->markdownContentUrl = $data['markdown_content_url'] ?? null;

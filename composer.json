@@ -2,11 +2,11 @@
     "name": "webcrawlerapi/sdk",
     "description": "A PHP SDK for WebCrawler API - turn website into data",
     "type": "library",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "license": "MIT",
     "authors": [
         {
-            "name": "Andrew"
+            "name": "WebcrawlerAPI Team"
         }
     ],
     "require": {
