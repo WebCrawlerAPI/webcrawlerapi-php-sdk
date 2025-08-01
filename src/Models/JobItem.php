@@ -17,9 +17,9 @@ class JobItem
     public string $title;
     public DateTime $createdAt;
     public DateTime $updatedAt;
-    public int $cost;
+    public float $cost;
     public string $referredUrl;
-    public string $lastError;
+    public ?string $lastError;
     public ?string $errorCode;
     public ?string $rawContentUrl;
     public ?string $cleanedContentUrl;
@@ -41,7 +41,7 @@ class JobItem
         $this->updatedAt = new DateTime($data['updated_at']);
         $this->cost = $data['cost'];
         $this->referredUrl = $data['referred_url'];
-        $this->lastError = $data['last_error'];
+        $this->lastError = $data['last_error'] ?? null;
         $this->errorCode = $data['error_code'] ?? null;
         $this->rawContentUrl = $data['raw_content_url'] ?? null;
         $this->cleanedContentUrl = $data['cleaned_content_url'] ?? null;
@@ -54,7 +54,7 @@ class JobItem
         $requiredFields = [
             'id', 'job_id', 'original_url', 'page_status_code',
             'status', 'title', 'created_at', 'updated_at',
-            'cost', 'referred_url', 'last_error'
+            'cost', 'referred_url'
         ];
 
         foreach ($requiredFields as $field) {

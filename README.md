@@ -167,6 +167,28 @@ Each JobItem object represents a crawled page and contains:
 - `cleanedContentUrl`: URL to the cleaned content (if scrapeType is "cleaned")
 - `markdownContentUrl`: URL to the markdown content (if scrapeType is "markdown")
 
+## Testing
+
+### Running Tests
+
+1. **Install dependencies:**
+   ```bash
+   composer install
+   ```
+
+2. **Run unit tests:**
+   ```bash
+   vendor/bin/phpunit tests/Unit --testdox
+   ```
+
+3. **Run integration tests (optional, requires API key):**
+   ```bash
+   export WEBCRAWLER_API_KEY="your-api-key"
+   vendor/bin/phpunit tests/Integration --testdox
+   ```
+
+Or use the test runner script: `./run-tests.sh`
+
 ## License
 
 MIT License

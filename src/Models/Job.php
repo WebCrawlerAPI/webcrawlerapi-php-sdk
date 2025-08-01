@@ -14,9 +14,9 @@ class Job
     public string $url;
     public string $status;
     public string $scrapeType;
-    public string $whitelistRegexp;
-    public string $blacklistRegexp;
-    public bool $allowSubdomains;
+    public ?string $whitelistRegexp;
+    public ?string $blacklistRegexp;
+    public ?bool $allowSubdomains;
     public int $itemsLimit;
     public DateTime $createdAt;
     public DateTime $updatedAt;
@@ -37,9 +37,9 @@ class Job
         $this->url = $data['url'];
         $this->status = $data['status'];
         $this->scrapeType = $data['scrape_type'];
-        $this->whitelistRegexp = $data['whitelist_regexp'];
-        $this->blacklistRegexp = $data['blacklist_regexp'];
-        $this->allowSubdomains = $data['allow_subdomains'];
+        $this->whitelistRegexp = $data['whitelist_regexp'] ?? null;
+        $this->blacklistRegexp = $data['blacklist_regexp'] ?? null;
+        $this->allowSubdomains = $data['allow_subdomains'] ?? null;
         $this->itemsLimit = $data['items_limit'];
         $this->createdAt = new DateTime($data['created_at']);
         $this->updatedAt = new DateTime($data['updated_at']);
@@ -63,7 +63,6 @@ class Job
     {
         $requiredFields = [
             'id', 'org_id', 'url', 'status', 'scrape_type',
-            'whitelist_regexp', 'blacklist_regexp', 'allow_subdomains',
             'items_limit', 'created_at', 'updated_at', 'webhook_url'
         ];
 
