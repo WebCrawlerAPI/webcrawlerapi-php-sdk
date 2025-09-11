@@ -42,13 +42,15 @@ class WebCrawlerAPI
         ?string $webhookUrl = null,
         bool $allowSubdomains = false,
         ?string $whitelistRegexp = null,
-        ?string $blacklistRegexp = null
+        ?string $blacklistRegexp = null,
+        bool $mainContentOnly = false
     ): CrawlResponse {
         $payload = [
             'url' => $url,
             'scrape_type' => $scrapeType,
             'items_limit' => $itemsLimit,
             'allow_subdomains' => $allowSubdomains,
+            'main_content_only' => $mainContentOnly,
         ];
 
         if ($webhookUrl !== null) {
@@ -109,6 +111,7 @@ class WebCrawlerAPI
         bool $allowSubdomains = false,
         ?string $whitelistRegexp = null,
         ?string $blacklistRegexp = null,
+        bool $mainContentOnly = false,
         int $maxPolls = 100
     ): Job {
         $response = $this->crawlAsync(
@@ -118,7 +121,8 @@ class WebCrawlerAPI
             $webhookUrl,
             $allowSubdomains,
             $whitelistRegexp,
-            $blacklistRegexp
+            $blacklistRegexp,
+            $mainContentOnly
         );
 
         $polls = 0;
