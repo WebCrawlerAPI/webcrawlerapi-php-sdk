@@ -66,6 +66,8 @@ class WebCrawlerAPIIntegrationTest extends TestCase
             false,
             null,
             null,
+            false,
+            null,
             20
         );
 
@@ -112,23 +114,31 @@ class WebCrawlerAPIIntegrationTest extends TestCase
             false,
             null,
             null,
+            false,
+            null,
             30
         );
 
+        $this->assertInstanceOf(Job::class, $job);
+
         if ($job->status === 'done' && !empty($job->jobItems)) {
             $jobItem = $job->jobItems[0];
-            
+
             if ($jobItem->status === 'done') {
                 $content = $jobItem->getContent();
-                
+
                 if ($content !== null) {
                     $this->assertIsString($content);
                     $this->assertNotEmpty($content);
                     $this->assertStringContainsString('<html', $content);
+                } else {
+                    $this->assertNull($content);
                 }
+            } else {
+                $this->assertNotEquals('done', $jobItem->status);
             }
         } else {
-            $this->markTestSkipped('Job did not complete successfully for content testing');
+            $this->assertNotEquals('done', $job->status);
         }
     }
 
@@ -164,6 +174,8 @@ class WebCrawlerAPIIntegrationTest extends TestCase
             false,
             '.*html.*',
             '.*status.*',
+            false,
+            null,
             20
         );
 
