@@ -51,7 +51,6 @@ class WebCrawlerAPI
             'scrape_type' => $scrapeType,
             'items_limit' => $itemsLimit,
             'allow_subdomains' => $allowSubdomains,
-            'main_content_only' => $mainContentOnly,
         ];
 
         if ($webhookUrl !== null) {
@@ -62,6 +61,9 @@ class WebCrawlerAPI
         }
         if ($blacklistRegexp !== null) {
             $payload['blacklist_regexp'] = $blacklistRegexp;
+        }
+        if ($mainContentOnly) {
+            $payload['main_content_only'] = $mainContentOnly;
         }
         if ($maxDepth !== null) {
             $payload['max_depth'] = $maxDepth;

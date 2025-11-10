@@ -276,10 +276,11 @@ class WebCrawlerAPITest extends TestCase
         $this->mockHandler->append(
             new Response(200, [], json_encode(['id' => 'job-123'])),
             new Response(200, [], json_encode($runningJobData)),
+            new Response(200, [], json_encode($runningJobData)),
             new Response(200, [], json_encode($runningJobData))
         );
 
-        $job = $this->api->crawl('https://example.com', 'html', 10, null, false, null, null, 1);
+        $job = $this->api->crawl('https://example.com', 'html', 10, null, false, null, null, false, null, 1);
 
         $this->assertEquals('running', $job->status);
         $this->assertFalse($job->isTerminal());
