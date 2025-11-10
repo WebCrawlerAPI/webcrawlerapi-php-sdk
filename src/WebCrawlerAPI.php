@@ -43,7 +43,8 @@ class WebCrawlerAPI
         bool $allowSubdomains = false,
         ?string $whitelistRegexp = null,
         ?string $blacklistRegexp = null,
-        bool $mainContentOnly = false
+        bool $mainContentOnly = false,
+        ?int $maxDepth = null
     ): CrawlResponse {
         $payload = [
             'url' => $url,
@@ -61,6 +62,9 @@ class WebCrawlerAPI
         }
         if ($blacklistRegexp !== null) {
             $payload['blacklist_regexp'] = $blacklistRegexp;
+        }
+        if ($maxDepth !== null) {
+            $payload['max_depth'] = $maxDepth;
         }
 
         $response = $this->client->post("/{$this->version}/crawl", [
@@ -112,6 +116,7 @@ class WebCrawlerAPI
         ?string $whitelistRegexp = null,
         ?string $blacklistRegexp = null,
         bool $mainContentOnly = false,
+        ?int $maxDepth = null,
         int $maxPolls = 100
     ): Job {
         $response = $this->crawlAsync(
@@ -122,7 +127,8 @@ class WebCrawlerAPI
             $allowSubdomains,
             $whitelistRegexp,
             $blacklistRegexp,
-            $mainContentOnly
+            $mainContentOnly,
+            $maxDepth
         );
 
         $polls = 0;

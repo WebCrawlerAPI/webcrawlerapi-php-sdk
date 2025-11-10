@@ -19,6 +19,7 @@ class JobItem
     public DateTime $updatedAt;
     public float $cost;
     public string $referredUrl;
+    public ?int $depth;
     public ?string $lastError;
     public ?string $errorCode;
     public ?string $rawContentUrl;
@@ -41,6 +42,7 @@ class JobItem
         $this->updatedAt = new DateTime($data['updated_at']);
         $this->cost = $data['cost'];
         $this->referredUrl = $data['referred_url'];
+        $this->depth = $data['depth'] ?? null;
         $this->lastError = $data['last_error'] ?? null;
         $this->errorCode = $data['error_code'] ?? null;
         $this->rawContentUrl = $data['raw_content_url'] ?? null;
