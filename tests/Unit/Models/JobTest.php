@@ -22,8 +22,8 @@ class JobTest extends TestCase
             'scrape_type' => 'html',
             'whitelist_regexp' => '.*article.*',
             'blacklist_regexp' => '.*ads.*',
-            'allow_subdomains' => true,
             'items_limit' => 10,
+            'max_age' => 604800,
             'created_at' => '2023-01-01T00:00:00Z',
             'updated_at' => '2023-01-01T00:01:00Z',
             'webhook_url' => 'https://webhook.com',
@@ -60,8 +60,8 @@ class JobTest extends TestCase
         $this->assertEquals('html', $job->scrapeType);
         $this->assertEquals('.*article.*', $job->whitelistRegexp);
         $this->assertEquals('.*ads.*', $job->blacklistRegexp);
-        $this->assertTrue($job->allowSubdomains);
         $this->assertEquals(10, $job->itemsLimit);
+        $this->assertEquals(604800, $job->maxAge);
         $this->assertInstanceOf(DateTime::class, $job->createdAt);
         $this->assertInstanceOf(DateTime::class, $job->updatedAt);
         $this->assertEquals('https://webhook.com', $job->webhookUrl);
@@ -92,7 +92,7 @@ class JobTest extends TestCase
         $this->assertEquals('job-123', $job->id);
         $this->assertNull($job->whitelistRegexp);
         $this->assertNull($job->blacklistRegexp);
-        $this->assertNull($job->allowSubdomains);
+        $this->assertNull($job->maxAge);
         $this->assertNull($job->recommendedPullDelayMs);
         $this->assertNull($job->finishedAt);
         $this->assertNull($job->webhookStatus);

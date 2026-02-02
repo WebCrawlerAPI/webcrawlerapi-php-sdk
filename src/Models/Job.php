@@ -16,10 +16,11 @@ class Job
     public string $scrapeType;
     public ?string $whitelistRegexp;
     public ?string $blacklistRegexp;
-    public ?bool $allowSubdomains;
     public int $itemsLimit;
     public ?int $maxDepth;
+    public ?int $maxAge;
     public DateTime $createdAt;
+
     public DateTime $updatedAt;
     public string $webhookUrl;
     public ?int $recommendedPullDelayMs;
@@ -37,12 +38,13 @@ class Job
         $this->orgId = $data['org_id'];
         $this->url = $data['url'];
         $this->status = $data['status'];
-        $this->scrapeType = $data['scrape_type'];
-        $this->whitelistRegexp = $data['whitelist_regexp'] ?? null;
-        $this->blacklistRegexp = $data['blacklist_regexp'] ?? null;
-        $this->allowSubdomains = $data['allow_subdomains'] ?? null;
-        $this->itemsLimit = $data['items_limit'];
-        $this->maxDepth = $data['max_depth'] ?? null;
+         $this->scrapeType = $data['scrape_type'];
+         $this->whitelistRegexp = $data['whitelist_regexp'] ?? null;
+         $this->blacklistRegexp = $data['blacklist_regexp'] ?? null;
+         $this->itemsLimit = $data['items_limit'];
+         $this->maxDepth = $data['max_depth'] ?? null;
+         $this->maxAge = $data['max_age'] ?? null;
+
         $this->createdAt = new DateTime($data['created_at']);
         $this->updatedAt = new DateTime($data['updated_at']);
         $this->webhookUrl = $data['webhook_url'];

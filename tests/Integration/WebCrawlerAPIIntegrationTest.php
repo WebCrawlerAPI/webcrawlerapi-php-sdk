@@ -25,7 +25,7 @@ class WebCrawlerAPIIntegrationTest extends TestCase
         }
 
         $response = $this->api->crawlAsync(
-            'https://httpbin.org/html',
+            'https://crawllab.dev/html',
             'html',
             1
         );
@@ -41,13 +41,13 @@ class WebCrawlerAPIIntegrationTest extends TestCase
             $this->markTestSkipped('Integration tests require a valid API key set in WEBCRAWLER_API_KEY environment variable');
         }
 
-        $crawlResponse = $this->api->crawlAsync('https://httpbin.org/html', 'html', 1);
+        $crawlResponse = $this->api->crawlAsync('https://crawllab.dev/html', 'html', 1);
         $job = $this->api->getJob($crawlResponse->id);
 
         $this->assertInstanceOf(Job::class, $job);
         $this->assertEquals($crawlResponse->id, $job->id);
         $this->assertContains($job->status, ['pending', 'running', 'done', 'error', 'cancelled', 'new', 'in_progress']);
-        $this->assertEquals('https://httpbin.org/html', $job->url);
+        $this->assertEquals('https://crawllab.dev/html', $job->url);
         $this->assertEquals('html', $job->scrapeType);
         $this->assertEquals(1, $job->itemsLimit);
     }
@@ -59,11 +59,10 @@ class WebCrawlerAPIIntegrationTest extends TestCase
         }
 
         $job = $this->api->crawl(
-            'https://httpbin.org/html',
+            'https://crawllab.dev/html',
             'html',
             1,
             null,
-            false,
             null,
             null,
             false,
@@ -107,17 +106,18 @@ class WebCrawlerAPIIntegrationTest extends TestCase
         }
 
         $job = $this->api->crawl(
-            'https://httpbin.org/html',
+            'https://books.toscrape.com',
             'html',
             1,
             null,
-            false,
             null,
             null,
             false,
             null,
-            30
+            null,
+            20
         );
+
 
         $this->assertInstanceOf(Job::class, $job);
 
@@ -171,9 +171,7 @@ class WebCrawlerAPIIntegrationTest extends TestCase
             'markdown',
             2,
             null,
-            false,
-            '.*html.*',
-            '.*status.*',
+            null,
             false,
             null,
             20
@@ -185,6 +183,5 @@ class WebCrawlerAPIIntegrationTest extends TestCase
         $this->assertEquals(2, $job->itemsLimit);
         $this->assertEquals('.*html.*', $job->whitelistRegexp);
         $this->assertEquals('.*status.*', $job->blacklistRegexp);
-        $this->assertIsBool($job->allowSubdomains ?? false);
     }
 }

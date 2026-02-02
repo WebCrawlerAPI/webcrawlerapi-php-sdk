@@ -80,9 +80,9 @@ class WebCrawlerAPITest extends TestCase
             'markdown',
             5,
             'https://webhook.com',
-            true,
             '.*article.*',
-            '.*ads.*'
+            '.*ads.*',
+            true
         );
 
         $this->assertInstanceOf(CrawlResponse::class, $response);
@@ -98,10 +98,10 @@ class WebCrawlerAPITest extends TestCase
             'url' => 'https://example.com',
             'scrape_type' => 'markdown',
             'items_limit' => 5,
-            'allow_subdomains' => true,
             'webhook_url' => 'https://webhook.com',
             'whitelist_regexp' => '.*article.*',
-            'blacklist_regexp' => '.*ads.*'
+            'blacklist_regexp' => '.*ads.*',
+            'main_content_only' => true
         ];
         $this->assertEquals($expectedBody, $body);
     }
@@ -121,8 +121,7 @@ class WebCrawlerAPITest extends TestCase
         $expectedBody = [
             'url' => 'https://example.com',
             'scrape_type' => 'html',
-            'items_limit' => 10,
-            'allow_subdomains' => false
+            'items_limit' => 10
         ];
         $this->assertEquals($expectedBody, $body);
     }
@@ -280,7 +279,7 @@ class WebCrawlerAPITest extends TestCase
             new Response(200, [], json_encode($runningJobData))
         );
 
-        $job = $this->api->crawl('https://example.com', 'html', 10, null, false, null, null, false, null, 1);
+        $job = $this->api->crawl('https://example.com', 'html', 10, null, null, null, false, null, null, 1);
 
         $this->assertEquals('running', $job->status);
         $this->assertFalse($job->isTerminal());
