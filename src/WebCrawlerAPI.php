@@ -236,7 +236,8 @@ class WebCrawlerAPI
             rawContent: $data['raw_content'] ?? null,
             pageStatusCode: (int)($data['page_status_code'] ?? 0),
             pageTitle: $data['page_title'] ?? null,
-            structuredData: $data['structured_data'] ?? null
+            structuredData: $data['structured_data'] ?? null,
+            links: $data['links'] ?? null
         );
     }
 
