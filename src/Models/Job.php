@@ -22,7 +22,7 @@ class Job
     public DateTime $createdAt;
 
     public DateTime $updatedAt;
-    public string $webhookUrl;
+    public ?string $webhookUrl;
     public ?int $recommendedPullDelayMs;
     public ?DateTime $finishedAt;
     public ?string $webhookStatus;
@@ -47,7 +47,7 @@ class Job
 
         $this->createdAt = new DateTime($data['created_at']);
         $this->updatedAt = new DateTime($data['updated_at']);
-        $this->webhookUrl = $data['webhook_url'];
+        $this->webhookUrl = $data['webhook_url'] ?? null;
         $this->recommendedPullDelayMs = $data['recommended_pull_delay_ms'] ?? null;
         
         $this->finishedAt = isset($data['finished_at']) && $data['finished_at'] 
@@ -67,7 +67,7 @@ class Job
     {
         $requiredFields = [
             'id', 'org_id', 'url', 'status', 'scrape_type',
-            'items_limit', 'created_at', 'updated_at', 'webhook_url'
+            'items_limit', 'created_at', 'updated_at'
         ];
 
         foreach ($requiredFields as $field) {

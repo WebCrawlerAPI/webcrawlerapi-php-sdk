@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use WebCrawlerAPI\Models\Job;
 use WebCrawlerAPI\Models\CrawlResponse;
+use WebCrawlerAPI\Models\JobMarkdownResponse;
 use WebCrawlerAPI\Models\ScrapeId;
 use WebCrawlerAPI\Models\ScrapeRequest;
 use WebCrawlerAPI\Models\ScrapeResponse;
@@ -168,6 +169,62 @@ class WebCrawlerAPI
         }
 
         return $job;
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    public function getJobMarkdown(string $jobId): JobMarkdownResponse
+    {
+        $response = $this->client->get("/{$this->version}/job/{$jobId}/markdown");
+        $data = json_decode($response->getBody()->getContents(), true);
+        if (!is_array($data) || !isset($data['content_url'])) {
+            throw new \RuntimeException('Invalid API response: missing content_url field');
+        }
+        return new JobMarkdownResponse($data['content_url']);
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    public function getJobMarkdownContent(string $jobId): string
+    {
+        $response = $this->client->get("/{$this->version}/job/{$jobId}/markdown/content");
+        return $response->getBody()->getContents();
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    public function crawlRawMarkdown(
+        string $url,
+        int $itemsLimit = 10,
+        ?string $webhookUrl = null,
+        ?string $whitelistRegexp = null,
+        ?string $blacklistRegexp = null,
+        bool $mainContentOnly = false,
+        ?int $maxDepth = null,
+        ?int $maxAge = null,
+        int $maxPolls = 100
+    ): string {
+        $job = $this->crawl(
+            $url,
+            'markdown',
+            $itemsLimit,
+            $webhookUrl,
+            $whitelistRegexp,
+            $blacklistRegexp,
+            $mainContentOnly,
+            $maxDepth,
+            $maxAge,
+            $maxPolls
+        );
+
+        if ($job->status !== 'done') {
+            throw new \RuntimeException("Job finished with status {$job->status}");
+        }
+
+        return $this->getJobMarkdownContent($job->id);
     }
 
     /**

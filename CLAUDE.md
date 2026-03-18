@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with the WebCrawlerAPI PHP SDK.
+This file provides guidance to AI coding agent when working with the WebCrawlerAPI PHP SDK.
 
 ## WebCrawlerAPI PHP SDK
 
