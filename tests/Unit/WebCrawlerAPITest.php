@@ -96,7 +96,7 @@ class WebCrawlerAPITest extends TestCase
         $body = json_decode($request->getBody()->getContents(), true);
         $expectedBody = [
             'url' => 'https://example.com',
-            'scrape_type' => 'markdown',
+            'output_formats' => ['markdown'],
             'items_limit' => 5,
             'webhook_url' => 'https://webhook.com',
             'whitelist_regexp' => '.*article.*',
@@ -120,7 +120,7 @@ class WebCrawlerAPITest extends TestCase
         $body = json_decode($request->getBody()->getContents(), true);
         $expectedBody = [
             'url' => 'https://example.com',
-            'scrape_type' => 'html',
+            'output_formats' => ['markdown'],
             'items_limit' => 10
         ];
         $this->assertEquals($expectedBody, $body);
@@ -275,14 +275,13 @@ class WebCrawlerAPITest extends TestCase
         $this->mockHandler->append(
             new Response(200, [], json_encode(['id' => 'job-123'])),
             new Response(200, [], json_encode($runningJobData)),
-            new Response(200, [], json_encode($runningJobData)),
             new Response(200, [], json_encode($runningJobData))
         );
 
-        $job = $this->api->crawl('https://example.com', 'html', 10, null, null, null, false, null, null, 1);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Crawling took too long');
 
-        $this->assertEquals('running', $job->status);
-        $this->assertFalse($job->isTerminal());
+        $this->api->crawl('https://example.com', 'html', 10, null, null, null, false, null, null, 1);
     }
 
     public function testHttpExceptionHandling(): void

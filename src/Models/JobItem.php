@@ -3,8 +3,6 @@
 namespace WebCrawlerAPI\Models;
 
 use DateTime;
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
 use InvalidArgumentException;
 
 class JobItem
@@ -25,6 +23,7 @@ class JobItem
     public ?string $rawContentUrl;
     public ?string $cleanedContentUrl;
     public ?string $markdownContentUrl;
+    public ?string $link;
     private Job $job;
     private ?string $content = null;
 
@@ -48,6 +47,7 @@ class JobItem
         $this->rawContentUrl = $data['raw_content_url'] ?? null;
         $this->cleanedContentUrl = $data['cleaned_content_url'] ?? null;
         $this->markdownContentUrl = $data['markdown_content_url'] ?? null;
+        $this->link = $data['link'] ?? null;
         $this->job = $job;
     }
 
@@ -66,12 +66,57 @@ class JobItem
         }
     }
 
+    private function resolveContentUrl(): ?string
+    {
+        // Prefer output_formats if present and non-empty, using priority: markdown > cleaned > html
+        if (!empty($this->job->outputFormats)) {
+            $priority = ['markdown', 'cleaned', 'html'];
+            foreach ($priority as $fmt) {
+                if (in_array($fmt, $this->job->outputFormats, true)) {
+                    return match ($fmt) {
+                        'markdown' => $this->markdownContentUrl,
+                        'cleaned'  => $this->cleanedContentUrl,
+                        'html'     => $this->rawContentUrl,
+                        default    => null,
+                    };
+                }
+            }
+            return null;
+        }
+
+        // Fall back to scrape_type for backward compatibility
+        return match ($this->job->scrapeType) {
+            'html'     => $this->rawContentUrl,
+            'cleaned'  => $this->cleanedContentUrl,
+            'markdown' => $this->markdownContentUrl,
+            default    => null,
+        };
+    }
+
+    private function fetchUrl(string $url): string
+    {
+        $context = stream_context_create([
+            'http' => [
+                'header' => "Accept: */*\r\nAccept-Encoding: identity",
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+            ],
+        ]);
+        $content = file_get_contents($url, false, $context);
+        if ($content === false) {
+            throw new \RuntimeException("Failed to fetch content from URL: {$url}");
+        }
+        return $content;
+    }
+
     /**
-     * @throws GuzzleException
+     * Returns the content based on the job's output format (respects output_formats priority,
+     * falls back to scrape_type). Returns null if the job or item is not done.
      */
     public function getContent(): ?string
     {
-        if ($this->status !== 'done') {
+        if ($this->job->status !== 'done' || $this->status !== 'done') {
             return null;
         }
 
@@ -79,27 +124,46 @@ class JobItem
             return $this->content;
         }
 
-        $contentUrl = match ($this->job->scrapeType) {
-            'html' => $this->rawContentUrl,
-            'cleaned' => $this->cleanedContentUrl,
-            'markdown' => $this->markdownContentUrl,
-            default => null,
-        };
+        $contentUrl = $this->resolveContentUrl();
 
         if (!$contentUrl) {
             return null;
         }
 
-        $client = new Client([
-            'headers' => [
-                'Accept-Encoding' => 'gzip, deflate, br',
-                'Accept' => '*/*'
-            ],
-            'decode_content' => false
-        ]);
-        $response = $client->get($contentUrl);
-        $this->content = $response->getBody()->getContents();
-
+        $this->content = $this->fetchUrl($contentUrl);
         return $this->content;
     }
-} 
+
+    /**
+     * @throws GuzzleException
+     */
+    public function getMarkdown(): ?string
+    {
+        if (!$this->markdownContentUrl) {
+            return null;
+        }
+        return $this->fetchUrl($this->markdownContentUrl);
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    public function getCleaned(): ?string
+    {
+        if (!$this->cleanedContentUrl) {
+            return null;
+        }
+        return $this->fetchUrl($this->cleanedContentUrl);
+    }
+
+    /**
+     * @throws GuzzleException
+     */
+    public function getHTML(): ?string
+    {
+        if (!$this->rawContentUrl) {
+            return null;
+        }
+        return $this->fetchUrl($this->rawContentUrl);
+    }
+}

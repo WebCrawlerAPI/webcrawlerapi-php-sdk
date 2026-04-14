@@ -237,7 +237,7 @@ class JobItemTest extends TestCase
     {
         $jobItem = new JobItem($this->validJobItemData, $this->mockJob);
 
-        $this->expectException(\GuzzleHttp\Exception\GuzzleException::class);
+        $this->expectException(\RuntimeException::class);
         $jobItem->getContent();
     }
 

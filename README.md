@@ -36,10 +36,8 @@ $crawler = new WebCrawlerAPI('your_api_key');
 // Synchronous crawling (blocks until completion)
 $job = $crawler->crawl(
     url: 'https://example.com',
-    scrapeType: 'markdown',
     itemsLimit: 10,
     webhookUrl: 'https://yourserver.com/webhook',
-    allowSubdomains: false,
     maxPolls: 100  // Optional: maximum number of status checks
 );
 echo "Job completed with status: {$job->status}\n";
@@ -61,20 +59,15 @@ foreach ($job->jobItems as $item) {
     }
 }
 
-// Access job items and their parent job
-foreach ($job->jobItems as $item) {
-    echo "Item URL: {$item->originalUrl}\n";
-    echo "Parent job status: {$item->job->status}\n";
-    echo "Parent job URL: {$item->job->url}\n";
-}
+// Access job-level metadata directly from the job
+echo "Crawl target: {$job->url}\n";
+echo "Job status: {$job->status}\n";
 
 // Or use asynchronous crawling
 $response = $crawler->crawlAsync(
     url: 'https://example.com',
-    scrapeType: 'markdown',
     itemsLimit: 10,
-    webhookUrl: 'https://yourserver.com/webhook',
-    allowSubdomains: false
+    webhookUrl: 'https://yourserver.com/webhook'
 );
 
 // Get the job ID from the response
@@ -116,10 +109,9 @@ Cancels a running job. Any items that are not in progress or already completed w
 
 ### Crawl Methods (crawl and crawlAsync)
 - `url` (required): The seed URL where the crawler starts. Can be any valid URL.
-- `scrapeType` (default: "html"): The type of scraping you want to perform. Can be "html", "cleaned", or "markdown".
+- `scrapeType` (default: "markdown"): The type of scraping you want to perform. Can be "html", "cleaned", or "markdown".
 - `itemsLimit` (default: 10): Crawler will stop when it reaches this limit of pages for this job.
 - `webhookUrl` (optional): The URL where the server will send a POST request once the task is completed.
-- `allowSubdomains` (default: false): If true, the crawler will also crawl subdomains.
 - `whitelistRegexp` (optional): A regular expression to whitelist URLs. Only URLs that match the pattern will be crawled.
 - `blacklistRegexp` (optional): A regular expression to blacklist URLs. URLs that match the pattern will be skipped.
 - `maxPolls` (optional, crawl only): Maximum number of status checks before returning (default: 100)

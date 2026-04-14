@@ -48,7 +48,7 @@ class WebCrawlerAPIIntegrationTest extends TestCase
         $this->assertEquals($crawlResponse->id, $job->id);
         $this->assertContains($job->status, ['pending', 'running', 'done', 'error', 'cancelled', 'new', 'in_progress']);
         $this->assertEquals('https://crawllab.dev/html', $job->url);
-        $this->assertEquals('html', $job->scrapeType);
+        $this->assertContains('html', $job->outputFormats ?? []);
         $this->assertEquals(1, $job->itemsLimit);
     }
 
@@ -171,7 +171,8 @@ class WebCrawlerAPIIntegrationTest extends TestCase
             'markdown',
             2,
             null,
-            null,
+            '.*html.*',
+            '.*status.*',
             false,
             null,
             20
@@ -179,7 +180,7 @@ class WebCrawlerAPIIntegrationTest extends TestCase
 
         $this->assertInstanceOf(Job::class, $job);
         $this->assertStringStartsWith('https://httpbin.org', $job->url);
-        $this->assertEquals('markdown', $job->scrapeType);
+        $this->assertContains('markdown', $job->outputFormats ?? []);
         $this->assertEquals(2, $job->itemsLimit);
         $this->assertEquals('.*html.*', $job->whitelistRegexp);
         $this->assertEquals('.*status.*', $job->blacklistRegexp);

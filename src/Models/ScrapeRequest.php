@@ -6,6 +6,7 @@ class ScrapeRequest
 {
     public function __construct(
         public readonly string $url,
+        /** @deprecated Use $outputFormats instead */
         public readonly ?string $outputFormat = null,
         public readonly ?string $webhookUrl = null,
         public readonly ?string $cleanSelectors = null,
@@ -14,7 +15,9 @@ class ScrapeRequest
         public readonly ?array $responseSchema = null,
         public readonly ?bool $respectRobotsTxt = null,
         public readonly ?bool $mainContentOnly = null,
-        public readonly ?int $maxAge = null
+        public readonly ?int $maxAge = null,
+        /** @var ('markdown'|'cleaned'|'html'|'links')[]|null */
+        public readonly ?array $outputFormats = null,
     ) {
     }
 
@@ -24,7 +27,9 @@ class ScrapeRequest
             'url' => $this->url,
         ];
 
-        if ($this->outputFormat !== null) {
+        if ($this->outputFormats !== null) {
+            $payload['output_formats'] = $this->outputFormats;
+        } elseif ($this->outputFormat !== null) {
             $payload['output_format'] = $this->outputFormat;
         }
         if ($this->webhookUrl !== null) {

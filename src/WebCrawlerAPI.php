@@ -14,7 +14,7 @@ use WebCrawlerAPI\Models\ScrapeResponseError;
 
 class WebCrawlerAPI
 {
-    private const DEFAULT_POLL_DELAY_SECONDS = 5;
+    private const INITIAL_PULL_DELAY_MS = 2000;
     private const SCRAPE_POLL_DELAY_SECONDS = 2;
     private const SCRAPE_VERSION = 'v2';
     private const SCRAPE_BASE_VERSIONED = '/v2/scrape';
@@ -53,18 +53,25 @@ class WebCrawlerAPI
      */
     public function crawlAsync(
         string $url,
-        string $scrapeType = 'html',
+        /** @deprecated Use $outputFormats instead */
+        string $scrapeType = 'markdown',
         int $itemsLimit = 10,
         ?string $webhookUrl = null,
         ?string $whitelistRegexp = null,
         ?string $blacklistRegexp = null,
         bool $mainContentOnly = false,
         ?int $maxDepth = null,
-        ?int $maxAge = null
+        ?int $maxAge = null,
+        ?array $outputFormats = null,
+        ?array $actions = null,
+        ?bool $respectRobotsTxt = null
     ): CrawlResponse {
+        // output_formats takes precedence; fall back to converting scrapeType for backward compat
+        $resolvedOutputFormats = $outputFormats ?? [$scrapeType];
+
         $payload = [
             'url' => $url,
-            'scrape_type' => $scrapeType,
+            'output_formats' => $resolvedOutputFormats,
             'items_limit' => $itemsLimit,
         ];
 
@@ -85,6 +92,12 @@ class WebCrawlerAPI
         }
         if ($maxDepth !== null) {
             $payload['max_depth'] = $maxDepth;
+        }
+        if ($actions !== null) {
+            $payload['actions'] = array_values($actions);
+        }
+        if ($respectRobotsTxt !== null) {
+            $payload['respect_robots_txt'] = $respectRobotsTxt;
         }
 
         $response = $this->client->post("/{$this->version}/crawl", [
@@ -129,7 +142,8 @@ class WebCrawlerAPI
      */
     public function crawl(
         string $url,
-        string $scrapeType = 'html',
+        /** @deprecated Use $outputFormats instead */
+        string $scrapeType = 'markdown',
         int $itemsLimit = 10,
         ?string $webhookUrl = null,
         ?string $whitelistRegexp = null,
@@ -137,7 +151,10 @@ class WebCrawlerAPI
         bool $mainContentOnly = false,
         ?int $maxDepth = null,
         ?int $maxAge = null,
-        int $maxPolls = 100
+        int $maxPolls = 100,
+        ?array $outputFormats = null,
+        ?array $actions = null,
+        ?bool $respectRobotsTxt = null
     ): Job {
         $response = $this->crawlAsync(
             $url,
@@ -148,27 +165,29 @@ class WebCrawlerAPI
             $blacklistRegexp,
             $mainContentOnly,
             $maxDepth,
-            $maxAge
+            $maxAge,
+            $outputFormats,
+            $actions,
+            $respectRobotsTxt
         );
 
-
-        $polls = 0;
-        while ($polls < $maxPolls) {
-            $job = $this->getJob($response->id);
+        $delayMs = self::INITIAL_PULL_DELAY_MS;
+        for ($i = 0; $i < $maxPolls; $i++) {
+            // Wait first, then poll (matching JS SDK behaviour)
+            usleep($delayMs * 1000);
+            $timestamp = (int)(microtime(true) * 1000);
+            $job = $this->getJob("{$response->id}?t={$timestamp}");
 
             if ($job->isTerminal()) {
                 return $job;
             }
 
-            $delaySeconds = $job->recommendedPullDelayMs
-                ? (int)($job->recommendedPullDelayMs / 1000)
-                : self::DEFAULT_POLL_DELAY_SECONDS;
-
-            sleep($delaySeconds);
-            $polls++;
+            if ($job->recommendedPullDelayMs > 0) {
+                $delayMs = $job->recommendedPullDelayMs;
+            }
         }
 
-        return $job;
+        throw new \RuntimeException('Crawling took too long, please retry or increase the number of polling retries');
     }
 
     /**
@@ -267,20 +286,62 @@ class WebCrawlerAPI
             throw new \RuntimeException('Invalid API response: expected array');
         }
 
-        if (isset($data['error_code'])) {
-            return new ScrapeResponseError(
-                success: $data['success'] ?? false,
-                errorCode: $data['error_code'],
-                errorMessage: $data['error_message'] ?? '' ,
-                status: $data['status'] ?? null
+        $status = $data['status'] ?? null;
+
+        if ($status === 'done') {
+            return new ScrapeResponse(
+                success: (bool)($data['success'] ?? false),
+                status: $status,
+                markdown: $data['markdown'] ?? null,
+                cleanedContent: $data['cleaned_content'] ?? null,
+                rawContent: $data['raw_content'] ?? null,
+                pageStatusCode: (int)($data['page_status_code'] ?? 0),
+                pageTitle: $data['page_title'] ?? null,
+                structuredData: $data['structured_data'] ?? null,
+                links: $data['links'] ?? null
             );
         }
 
-        if (isset($data['status']) && $data['status'] !== 'done' && $data['status'] !== 'error') {
+        if ($status === 'error' || isset($data['error_code'])) {
+            return new ScrapeResponseError(
+                success: (bool)($data['success'] ?? false),
+                errorCode: $data['error_code'] ?? 'unknown_error',
+                errorMessage: $data['error_message'] ?? $data['error'] ?? 'Unknown error',
+                status: $status
+            );
+        }
+
+        // in_progress or any other non-terminal status — return minimal ScrapeResponse (not an error)
+        return new ScrapeResponse(
+            success: false,
+            status: $status,
+            pageStatusCode: 0
+        );
+    }
+
+    /**
+     * Scrapes a URL synchronously using the /v2/scrape endpoint (blocks until result is ready).
+     *
+     * @throws GuzzleException
+     */
+    public function scrape(ScrapeRequest $request): ScrapeResponse|ScrapeResponseError
+    {
+        $response = $this->scrapeClient->post(self::SCRAPE_BASE_VERSIONED, [
+            'json' => $request->toPayload(),
+            'headers' => [
+                'User-Agent' => 'WebcrawlerAPI-PHP-Client',
+            ],
+            'http_errors' => false,
+        ]);
+
+        $data = json_decode($response->getBody()->getContents(), true);
+        $statusCode = $response->getStatusCode();
+
+        if ($statusCode >= 400 || isset($data['error_code'])) {
             return new ScrapeResponseError(
                 success: false,
-                errorCode: 'in_progress',
-                errorMessage: 'Scrape in progress',
+                errorCode: $data['error_code'] ?? 'unknown_error',
+                errorMessage: $data['error_message'] ?? 'Unknown error',
                 status: $data['status'] ?? null
             );
         }
@@ -296,32 +357,5 @@ class WebCrawlerAPI
             structuredData: $data['structured_data'] ?? null,
             links: $data['links'] ?? null
         );
-    }
-
-    /**
-     * @throws GuzzleException
-     */
-    public function scrape(ScrapeRequest $request, int $maxPolls = 100): ScrapeResponse|ScrapeResponseError
-    {
-        $scrapeId = $this->scrapeAsync($request);
-
-        $polls = 0;
-        $result = null;
-        while ($polls < $maxPolls) {
-            $result = $this->getScrape($scrapeId->id);
-
-            if ($result instanceof ScrapeResponseError && $result->status !== 'in_progress') {
-                return $result;
-            }
-
-            if ($result instanceof ScrapeResponse && ($result->status === 'done' || $result->success)) {
-                return $result;
-            }
-
-            sleep(self::SCRAPE_POLL_DELAY_SECONDS);
-            $polls++;
-        }
-
-        return $result ?? new ScrapeResponseError(false, 'timeout', 'Scrape polling timed out', null);
     }
 }

@@ -13,7 +13,10 @@ class Job
     public string $orgId;
     public string $url;
     public string $status;
-    public string $scrapeType;
+    /** @deprecated Use $outputFormats instead */
+    public ?string $scrapeType;
+    /** @var string[]|null */
+    public ?array $outputFormats;
     public ?string $whitelistRegexp;
     public ?string $blacklistRegexp;
     public int $itemsLimit;
@@ -38,12 +41,13 @@ class Job
         $this->orgId = $data['org_id'];
         $this->url = $data['url'];
         $this->status = $data['status'];
-         $this->scrapeType = $data['scrape_type'];
-         $this->whitelistRegexp = $data['whitelist_regexp'] ?? null;
-         $this->blacklistRegexp = $data['blacklist_regexp'] ?? null;
-         $this->itemsLimit = $data['items_limit'];
-         $this->maxDepth = $data['max_depth'] ?? null;
-         $this->maxAge = $data['max_age'] ?? null;
+        $this->scrapeType = $data['scrape_type'] ?? null;
+        $this->outputFormats = $data['output_formats'] ?? null;
+        $this->whitelistRegexp = $data['whitelist_regexp'] ?? null;
+        $this->blacklistRegexp = $data['blacklist_regexp'] ?? null;
+        $this->itemsLimit = $data['items_limit'];
+        $this->maxDepth = $data['max_depth'] ?? null;
+        $this->maxAge = $data['max_age'] ?? null;
 
         $this->createdAt = new DateTime($data['created_at']);
         $this->updatedAt = new DateTime($data['updated_at']);
@@ -66,7 +70,7 @@ class Job
     private function validateData(array $data): void
     {
         $requiredFields = [
-            'id', 'org_id', 'url', 'status', 'scrape_type',
+            'id', 'org_id', 'url', 'status',
             'items_limit', 'created_at', 'updated_at'
         ];
 
