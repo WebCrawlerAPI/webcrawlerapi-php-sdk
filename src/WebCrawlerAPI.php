@@ -3,10 +3,17 @@
 namespace WebCrawlerAPI;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\GuzzleException;
+use Psr\Http\Message\ResponseInterface;
+use WebCrawlerAPI\Exceptions\WebcrawlerApiException;
+use WebCrawlerAPI\Models\AgentRun;
+use WebCrawlerAPI\Models\AgentRunRequest;
 use WebCrawlerAPI\Models\Job;
 use WebCrawlerAPI\Models\CrawlResponse;
 use WebCrawlerAPI\Models\JobMarkdownResponse;
+use WebCrawlerAPI\Models\MarkdownRequest;
+use WebCrawlerAPI\Models\MarkdownResponse;
 use WebCrawlerAPI\Models\ScrapeId;
 use WebCrawlerAPI\Models\ScrapeRequest;
 use WebCrawlerAPI\Models\ScrapeResponse;
@@ -16,6 +23,7 @@ class WebCrawlerAPI
 {
     private const INITIAL_PULL_DELAY_MS = 2000;
     private const SCRAPE_POLL_DELAY_SECONDS = 2;
+    private const AGENT_POLL_DELAY_SECONDS = 2;
     private const SCRAPE_VERSION = 'v2';
     private const SCRAPE_BASE_VERSIONED = '/v2/scrape';
     private string $apiKey;
@@ -49,7 +57,54 @@ class WebCrawlerAPI
     }
 
     /**
-     * @throws GuzzleException
+     * Sends a request through the main client and maps failures to WebcrawlerApiException.
+     *
+     * @throws WebcrawlerApiException
+     */
+    private function send(string $method, string $uri, array $options = []): ResponseInterface
+    {
+        try {
+            return $this->client->request($method, $uri, $options);
+        } catch (BadResponseException $e) {
+            $response = $e->getResponse();
+            $errorData = json_decode((string)$response->getBody(), true);
+            if (is_array($errorData)) {
+                $errorCode = $errorData['error_code'] ?? ErrorCode::UNKNOWN_ERROR;
+                $errorMessage = $errorData['error_message'] ?? $errorData['error'] ?? 'Unknown error';
+            } else {
+                $errorCode = ErrorCode::UNKNOWN_ERROR;
+                $errorMessage = "Request failed with status {$response->getStatusCode()} {$response->getReasonPhrase()}";
+            }
+            throw new WebcrawlerApiException($errorCode, $errorMessage, $response->getStatusCode(), $e);
+        } catch (GuzzleException $e) {
+            throw new WebcrawlerApiException(
+                ErrorCode::NETWORK_ERROR,
+                "Failed to send request: {$e->getMessage()}",
+                0,
+                $e
+            );
+        }
+    }
+
+    /**
+     * @throws WebcrawlerApiException
+     */
+    private function sendJson(string $method, string $uri, array $options = []): array
+    {
+        $response = $this->send($method, $uri, $options);
+        $data = json_decode($response->getBody()->getContents(), true);
+        if (!is_array($data)) {
+            throw new WebcrawlerApiException(
+                ErrorCode::INVALID_RESPONSE,
+                'Invalid API response: expected array',
+                $response->getStatusCode()
+            );
+        }
+        return $data;
+    }
+
+    /**
+     * @throws WebcrawlerApiException
      */
     public function crawlAsync(
         string $url,
@@ -63,7 +118,6 @@ class WebCrawlerAPI
         ?int $maxDepth = null,
         ?int $maxAge = null,
         ?array $outputFormats = null,
-        ?array $actions = null,
         ?bool $respectRobotsTxt = null
     ): CrawlResponse {
         // output_formats takes precedence; fall back to converting scrapeType for backward compat
@@ -93,52 +147,46 @@ class WebCrawlerAPI
         if ($maxDepth !== null) {
             $payload['max_depth'] = $maxDepth;
         }
-        if ($actions !== null) {
-            $payload['actions'] = array_values($actions);
-        }
         if ($respectRobotsTxt !== null) {
             $payload['respect_robots_txt'] = $respectRobotsTxt;
         }
 
-        $response = $this->client->post("/{$this->version}/crawl", [
+        $response = $this->send('POST', "/{$this->version}/crawl", [
             'json' => $payload,
         ]);
 
         $data = json_decode($response->getBody()->getContents(), true);
         if (!isset($data['id'])) {
-            throw new \RuntimeException('Invalid API response: missing id field');
+            throw new WebcrawlerApiException(
+                ErrorCode::INVALID_RESPONSE,
+                'Invalid API response: missing id field',
+                $response->getStatusCode()
+            );
         }
         return new CrawlResponse($data['id']);
     }
 
     /**
-     * @throws GuzzleException
+     * @throws WebcrawlerApiException
      */
     public function getJob(string $jobId): Job
     {
-        $response = $this->client->get("/{$this->version}/job/{$jobId}");
-        $data = json_decode($response->getBody()->getContents(), true);
-        if (!is_array($data)) {
-            throw new \RuntimeException('Invalid API response: expected array');
-        }
+        $data = $this->sendJson('GET', "/{$this->version}/job/{$jobId}");
         return new Job($data);
     }
 
     /**
-     * @throws GuzzleException
+     * @throws WebcrawlerApiException
      */
     public function cancelJob(string $jobId): array
     {
-        $response = $this->client->put("/{$this->version}/job/{$jobId}/cancel");
-        $data = json_decode($response->getBody()->getContents(), true);
-        if (!is_array($data)) {
-            throw new \RuntimeException('Invalid API response: expected array');
-        }
-        return $data;
+        return $this->sendJson('PUT', "/{$this->version}/job/{$jobId}/cancel");
     }
 
     /**
-     * @throws GuzzleException
+     * Crawls a URL and polls until the job reaches a terminal status.
+     *
+     * @throws WebcrawlerApiException with error code "timeout" when maxPolls is exhausted
      */
     public function crawl(
         string $url,
@@ -153,7 +201,6 @@ class WebCrawlerAPI
         ?int $maxAge = null,
         int $maxPolls = 100,
         ?array $outputFormats = null,
-        ?array $actions = null,
         ?bool $respectRobotsTxt = null
     ): Job {
         $response = $this->crawlAsync(
@@ -167,7 +214,6 @@ class WebCrawlerAPI
             $maxDepth,
             $maxAge,
             $outputFormats,
-            $actions,
             $respectRobotsTxt
         );
 
@@ -187,63 +233,108 @@ class WebCrawlerAPI
             }
         }
 
-        throw new \RuntimeException('Crawling took too long, please retry or increase the number of polling retries');
+        throw new WebcrawlerApiException(
+            ErrorCode::TIMEOUT,
+            'Crawling took too long, please retry or increase the number of polling retries'
+        );
     }
 
     /**
-     * @throws GuzzleException
+     * @throws WebcrawlerApiException
      */
     public function getJobMarkdown(string $jobId): JobMarkdownResponse
     {
-        $response = $this->client->get("/{$this->version}/job/{$jobId}/markdown");
-        $data = json_decode($response->getBody()->getContents(), true);
-        if (!is_array($data) || !isset($data['content_url'])) {
-            throw new \RuntimeException('Invalid API response: missing content_url field');
+        $data = $this->sendJson('GET', "/{$this->version}/job/{$jobId}/markdown");
+        if (!isset($data['content_url'])) {
+            throw new WebcrawlerApiException(
+                ErrorCode::INVALID_RESPONSE,
+                'Invalid API response: missing content_url field'
+            );
         }
         return new JobMarkdownResponse($data['content_url']);
     }
 
     /**
-     * @throws GuzzleException
+     * @throws WebcrawlerApiException
      */
     public function getJobMarkdownContent(string $jobId): string
     {
-        $response = $this->client->get("/{$this->version}/job/{$jobId}/markdown/content");
+        $response = $this->send('GET', "/{$this->version}/job/{$jobId}/markdown/content");
         return $response->getBody()->getContents();
     }
 
     /**
-     * @throws GuzzleException
+     * Scrapes a single page and returns its main content as LLM-cleaned markdown (POST /markdown).
+     *
+     * @throws WebcrawlerApiException
      */
-    public function crawlRawMarkdown(
-        string $url,
-        int $itemsLimit = 10,
-        ?string $webhookUrl = null,
-        ?string $whitelistRegexp = null,
-        ?string $blacklistRegexp = null,
-        bool $mainContentOnly = false,
-        ?int $maxDepth = null,
-        ?int $maxAge = null,
-        int $maxPolls = 100
-    ): string {
-        $job = $this->crawl(
-            $url,
-            'markdown',
-            $itemsLimit,
-            $webhookUrl,
-            $whitelistRegexp,
-            $blacklistRegexp,
-            $mainContentOnly,
-            $maxDepth,
-            $maxAge,
-            $maxPolls
-        );
+    public function markdown(MarkdownRequest $request): MarkdownResponse
+    {
+        $data = $this->sendJson('POST', '/markdown', [
+            'json' => $request->toPayload(),
+        ]);
 
-        if ($job->status !== 'done') {
-            throw new \RuntimeException("Job finished with status {$job->status}");
+        return new MarkdownResponse(
+            success: (bool)($data['success'] ?? false),
+            markdown: $data['markdown'] ?? null
+        );
+    }
+
+    /**
+     * Starts an agent run and returns immediately (POST /v1/agent).
+     *
+     * @throws WebcrawlerApiException
+     */
+    public function runAgentAsync(AgentRunRequest $request): AgentRun
+    {
+        $data = $this->sendJson('POST', "/{$this->version}/agent", [
+            'json' => $request->toPayload(),
+        ]);
+        return new AgentRun($data);
+    }
+
+    /**
+     * @throws WebcrawlerApiException
+     */
+    public function getAgentJob(string $jobId): AgentRun
+    {
+        $data = $this->sendJson('GET', "/{$this->version}/agent/job/{$jobId}", [
+            'headers' => [
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+            ],
+        ]);
+        return new AgentRun($data);
+    }
+
+    /**
+     * Runs an agent and polls until it reaches a terminal status (done, error, canceled).
+     *
+     * @throws WebcrawlerApiException with error code "timeout" when maxPolls is exhausted
+     */
+    public function runAgent(AgentRunRequest $request, int $maxPolls = 100): AgentRun
+    {
+        $run = $this->runAgentAsync($request);
+
+        if ($run->isTerminal()) {
+            return $run;
         }
 
-        return $this->getJobMarkdownContent($job->id);
+        for ($i = 0; $i < $maxPolls; $i++) {
+            sleep(self::AGENT_POLL_DELAY_SECONDS);
+            $timestamp = (int)(microtime(true) * 1000);
+            $agentJob = $this->getAgentJob("{$run->id}?t={$timestamp}");
+
+            if ($agentJob->isTerminal()) {
+                return $agentJob;
+            }
+        }
+
+        throw new WebcrawlerApiException(
+            ErrorCode::TIMEOUT,
+            'Agent run took too long, please retry or increase the number of polling retries'
+        );
     }
 
     /**

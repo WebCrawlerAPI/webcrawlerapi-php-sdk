@@ -4,6 +4,7 @@ namespace WebCrawlerAPI\Models;
 
 use DateTime;
 use InvalidArgumentException;
+use WebCrawlerAPI\JobStatus;
 
 class JobItem
 {
@@ -23,7 +24,8 @@ class JobItem
     public ?string $rawContentUrl;
     public ?string $cleanedContentUrl;
     public ?string $markdownContentUrl;
-    public ?string $link;
+    /** @var mixed Links found on the page, as returned by the API in the `links` field. */
+    public mixed $links;
     private Job $job;
     private ?string $content = null;
 
@@ -47,7 +49,7 @@ class JobItem
         $this->rawContentUrl = $data['raw_content_url'] ?? null;
         $this->cleanedContentUrl = $data['cleaned_content_url'] ?? null;
         $this->markdownContentUrl = $data['markdown_content_url'] ?? null;
-        $this->link = $data['link'] ?? null;
+        $this->links = $data['links'] ?? null;
         $this->job = $job;
     }
 
@@ -116,7 +118,7 @@ class JobItem
      */
     public function getContent(): ?string
     {
-        if ($this->job->status !== 'done' || $this->status !== 'done') {
+        if ($this->job->status !== JobStatus::DONE || $this->status !== JobStatus::DONE) {
             return null;
         }
 

@@ -4,10 +4,11 @@ namespace WebCrawlerAPI\Models;
 
 use DateTime;
 use InvalidArgumentException;
+use WebCrawlerAPI\JobStatus;
 
 class Job
 {
-    private const TERMINAL_STATUSES = ['done', 'error', 'cancelled'];
+    private const TERMINAL_STATUSES = [JobStatus::DONE, JobStatus::ERROR, JobStatus::CANCELLED];
 
     public string $id;
     public string $orgId;

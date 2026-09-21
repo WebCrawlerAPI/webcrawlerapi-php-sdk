@@ -3,6 +3,7 @@
 namespace WebCrawlerAPI\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use WebCrawlerAPI\Exceptions\WebcrawlerApiException;
 use WebCrawlerAPI\Models\CrawlResponse;
 use WebCrawlerAPI\Models\Job;
 use WebCrawlerAPI\WebCrawlerAPI;
@@ -146,7 +147,7 @@ class WebCrawlerAPIIntegrationTest extends TestCase
     {
         $invalidApi = new WebCrawlerAPI('invalid-key');
 
-        $this->expectException(\GuzzleHttp\Exception\ClientException::class);
+        $this->expectException(WebcrawlerApiException::class);
         $invalidApi->crawlAsync('https://example.com');
     }
 
@@ -156,7 +157,7 @@ class WebCrawlerAPIIntegrationTest extends TestCase
             $this->markTestSkipped('Integration tests require a valid API key set in WEBCRAWLER_API_KEY environment variable');
         }
 
-        $this->expectException(\GuzzleHttp\Exception\ClientException::class);
+        $this->expectException(WebcrawlerApiException::class);
         $this->api->getJob('non-existent-job-id');
     }
 

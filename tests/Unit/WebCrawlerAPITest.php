@@ -11,7 +11,9 @@ use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use WebCrawlerAPI\Models\CrawlResponse;
+use WebCrawlerAPI\Exceptions\WebcrawlerApiException;
 use WebCrawlerAPI\Models\Job;
+use WebCrawlerAPI\Models\MarkdownRequest;
 use WebCrawlerAPI\WebCrawlerAPI;
 
 class WebCrawlerAPITest extends TestCase
@@ -290,7 +292,97 @@ class WebCrawlerAPITest extends TestCase
             new RequestException('Network error', new Request('POST', '/crawl'))
         );
 
-        $this->expectException(RequestException::class);
+        $this->expectException(\WebCrawlerAPI\Exceptions\WebcrawlerApiException::class);
         $this->api->crawlAsync('https://example.com');
+    }
+
+    public function testMarkdownSuccess(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode(['success' => true, 'markdown' => '# Title']))
+        );
+
+        $result = $this->api->markdown(new MarkdownRequest('https://example.com/article'));
+
+        $this->assertTrue($result->success);
+        $this->assertSame('# Title', $result->markdown);
+
+        $request = $this->requestHistory[0]['request'];
+        $this->assertEquals('POST', $request->getMethod());
+        $this->assertEquals('/markdown', $request->getUri()->getPath());
+        $this->assertEquals(
+            ['url' => 'https://example.com/article'],
+            json_decode((string)$request->getBody(), true)
+        );
+    }
+
+    public function testMarkdownWithoutMarkdownField(): void
+    {
+        $this->mockHandler->append(new Response(200, [], json_encode(['success' => false])));
+
+        $result = $this->api->markdown(new MarkdownRequest('https://example.com'));
+
+        $this->assertFalse($result->success);
+        $this->assertNull($result->markdown);
+    }
+
+    public function testMarkdownMapsApiError(): void
+    {
+        $this->mockHandler->append(
+            new Response(402, [], json_encode([
+                'success' => false,
+                'error_code' => 'insufficient_balance',
+                'error_message' => 'Insufficient account balance',
+            ]))
+        );
+
+        try {
+            $this->api->markdown(new MarkdownRequest('https://example.com'));
+            $this->fail('Expected WebcrawlerApiException');
+        } catch (WebcrawlerApiException $e) {
+            $this->assertSame('insufficient_balance', $e->getErrorCode());
+            $this->assertSame('Insufficient account balance', $e->getErrorMessage());
+            $this->assertSame(402, $e->getStatusCode());
+        }
+    }
+
+    public function testMarkdownUnparseableErrorBody(): void
+    {
+        $this->mockHandler->append(new Response(500, [], 'oops'));
+
+        try {
+            $this->api->markdown(new MarkdownRequest('https://example.com'));
+            $this->fail('Expected WebcrawlerApiException');
+        } catch (WebcrawlerApiException $e) {
+            $this->assertSame('unknown_error', $e->getErrorCode());
+            $this->assertSame(500, $e->getStatusCode());
+        }
+    }
+
+    public function testMarkdownThrowsOnInvalidResponse(): void
+    {
+        $this->mockHandler->append(new Response(200, [], 'not json'));
+
+        try {
+            $this->api->markdown(new MarkdownRequest('https://example.com'));
+            $this->fail('Expected WebcrawlerApiException');
+        } catch (WebcrawlerApiException $e) {
+            $this->assertSame('invalid_response', $e->getErrorCode());
+        }
+    }
+
+    public function testMarkdownWrapsNetworkError(): void
+    {
+        $this->mockHandler->append(
+            new RequestException('Connection refused', new Request('POST', '/markdown'))
+        );
+
+        try {
+            $this->api->markdown(new MarkdownRequest('https://example.com'));
+            $this->fail('Expected WebcrawlerApiException');
+        } catch (WebcrawlerApiException $e) {
+            $this->assertSame('network_error', $e->getErrorCode());
+            $this->assertSame(0, $e->getStatusCode());
+        }
     }
 }

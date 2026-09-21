@@ -10,7 +10,6 @@ class ScrapeRequest
         public readonly ?string $outputFormat = null,
         public readonly ?string $webhookUrl = null,
         public readonly ?string $cleanSelectors = null,
-        public readonly ?array $actions = null,
         public readonly ?string $prompt = null,
         public readonly ?array $responseSchema = null,
         public readonly ?bool $respectRobotsTxt = null,
@@ -37,9 +36,6 @@ class ScrapeRequest
         }
         if ($this->cleanSelectors !== null) {
             $payload['clean_selectors'] = $this->cleanSelectors;
-        }
-        if ($this->actions !== null) {
-            $payload['actions'] = array_values($this->actions);
         }
         if ($this->prompt !== null) {
             $payload['prompt'] = $this->prompt;
