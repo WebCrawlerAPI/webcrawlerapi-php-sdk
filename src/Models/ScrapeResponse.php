@@ -13,7 +13,8 @@ class ScrapeResponse
         public readonly int $pageStatusCode = 0,
         public readonly ?string $pageTitle = null,
         public readonly mixed $structuredData = null,
-        public readonly ?array $links = null
+        public readonly ?array $links = null,
+        public readonly int $recommendedPullDelayMs = 0
     ) {
     }
 }

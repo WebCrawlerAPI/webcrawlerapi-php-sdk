@@ -14,6 +14,9 @@ use WebCrawlerAPI\Models\CrawlResponse;
 use WebCrawlerAPI\Exceptions\WebcrawlerApiException;
 use WebCrawlerAPI\Models\Job;
 use WebCrawlerAPI\Models\MarkdownRequest;
+use WebCrawlerAPI\Models\ScrapeRequest;
+use WebCrawlerAPI\Models\ScrapeResponse;
+use WebCrawlerAPI\Models\ScrapeResponseError;
 use WebCrawlerAPI\WebCrawlerAPI;
 
 class WebCrawlerAPITest extends TestCase
@@ -34,6 +37,10 @@ class WebCrawlerAPITest extends TestCase
         $clientProperty = $reflection->getProperty('client');
         $clientProperty->setAccessible(true);
         $clientProperty->setValue($this->api, new Client(['handler' => $handlerStack]));
+
+        $scrapeClientProperty = $reflection->getProperty('scrapeClient');
+        $scrapeClientProperty->setAccessible(true);
+        $scrapeClientProperty->setValue($this->api, new Client(['handler' => $handlerStack]));
     }
 
     protected function tearDown(): void
@@ -369,6 +376,72 @@ class WebCrawlerAPITest extends TestCase
         } catch (WebcrawlerApiException $e) {
             $this->assertSame('invalid_response', $e->getErrorCode());
         }
+    }
+
+    public function testScrapeStartsAsyncAndPollsUntilDone(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode(['id' => 'scrape-1'])),
+            new Response(200, [], json_encode([
+                'status' => 'in_progress',
+                'recommended_pull_delay_ms' => 1,
+            ])),
+            new Response(200, [], json_encode([
+                'status' => 'done',
+                'success' => true,
+                'markdown' => '# Hello',
+                'page_title' => 'Hello',
+            ]))
+        );
+
+        $result = $this->api->scrape(new ScrapeRequest(url: 'https://example.com'));
+
+        $this->assertInstanceOf(ScrapeResponse::class, $result);
+        $this->assertSame('done', $result->status);
+        $this->assertSame('# Hello', $result->markdown);
+        $this->assertCount(3, $this->requestHistory);
+
+        $start = $this->requestHistory[0]['request'];
+        $this->assertSame('POST', $start->getMethod());
+        $this->assertSame('/v2/scrape', $start->getUri()->getPath());
+        $this->assertSame('async=true', $start->getUri()->getQuery());
+
+        $poll = $this->requestHistory[1]['request'];
+        $this->assertSame('GET', $poll->getMethod());
+        $this->assertSame('/v2/scrape/scrape-1', $poll->getUri()->getPath());
+    }
+
+    public function testScrapeReturnsErrorResponseFromPolling(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode(['id' => 'scrape-2'])),
+            new Response(200, [], json_encode([
+                'status' => 'error',
+                'error_code' => 'webpage_non_success',
+                'error_message' => 'Page returned 404',
+            ]))
+        );
+
+        $result = $this->api->scrape(new ScrapeRequest(url: 'https://example.com/missing'));
+
+        $this->assertInstanceOf(ScrapeResponseError::class, $result);
+        $this->assertSame('webpage_non_success', $result->errorCode);
+        $this->assertSame('Page returned 404', $result->errorMessage);
+    }
+
+    public function testScrapeStopsAtMaxPolls(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode(['id' => 'scrape-3'])),
+            new Response(200, [], json_encode(['status' => 'in_progress', 'recommended_pull_delay_ms' => 1])),
+            new Response(200, [], json_encode(['status' => 'in_progress', 'recommended_pull_delay_ms' => 1]))
+        );
+
+        $result = $this->api->scrape(new ScrapeRequest(url: 'https://example.com'), maxPolls: 2);
+
+        $this->assertInstanceOf(ScrapeResponse::class, $result);
+        $this->assertSame('in_progress', $result->status);
+        $this->assertCount(3, $this->requestHistory);
     }
 
     public function testMarkdownWrapsNetworkError(): void

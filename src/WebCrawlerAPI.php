@@ -23,6 +23,7 @@ class WebCrawlerAPI
 {
     private const INITIAL_PULL_DELAY_MS = 2000;
     private const SCRAPE_POLL_DELAY_SECONDS = 2;
+    private const SCRAPE_MAX_WAIT_SECONDS = 400;
     private const AGENT_POLL_DELAY_SECONDS = 2;
     private const SCRAPE_VERSION = 'v2';
     private const SCRAPE_BASE_VERSIONED = '/v2/scrape';
@@ -406,47 +407,46 @@ class WebCrawlerAPI
         return new ScrapeResponse(
             success: false,
             status: $status,
-            pageStatusCode: 0
+            pageStatusCode: 0,
+            recommendedPullDelayMs: (int)($data['recommended_pull_delay_ms'] ?? 0)
         );
     }
 
     /**
-     * Scrapes a URL synchronously using the /v2/scrape endpoint (blocks until result is ready).
+     * Scrapes a URL: starts an async scrape and polls until it is done or failed.
      *
+     * Polling uses the server-recommended delay when provided (fallback: 2 seconds) and stops
+     * after 400 seconds total. Returns the result on "done", a ScrapeResponseError on error, and
+     * the last known (non-terminal) state if the time limit is reached.
+     *
+     * @param int|null $maxPolls Optional extra cap on the number of polls (in addition to the 400 second limit)
      * @throws GuzzleException
      */
-    public function scrape(ScrapeRequest $request): ScrapeResponse|ScrapeResponseError
+    public function scrape(ScrapeRequest $request, ?int $maxPolls = null): ScrapeResponse|ScrapeResponseError
     {
-        $response = $this->scrapeClient->post(self::SCRAPE_BASE_VERSIONED, [
-            'json' => $request->toPayload(),
-            'headers' => [
-                'User-Agent' => 'WebcrawlerAPI-PHP-Client',
-            ],
-            'http_errors' => false,
-        ]);
+        $scrapeId = $this->scrapeAsync($request)->id;
 
-        $data = json_decode($response->getBody()->getContents(), true);
-        $statusCode = $response->getStatusCode();
+        $deadline = microtime(true) + self::SCRAPE_MAX_WAIT_SECONDS;
+        $polls = 0;
+        $delayMs = self::SCRAPE_POLL_DELAY_SECONDS * 1000;
 
-        if ($statusCode >= 400 || isset($data['error_code'])) {
-            return new ScrapeResponseError(
-                success: false,
-                errorCode: $data['error_code'] ?? 'unknown_error',
-                errorMessage: $data['error_message'] ?? 'Unknown error',
-                status: $data['status'] ?? null
-            );
+        while (true) {
+            $result = $this->getScrape($scrapeId);
+            $polls++;
+
+            if ($result instanceof ScrapeResponseError || $result->status === 'done') {
+                return $result;
+            }
+
+            if ($result->recommendedPullDelayMs > 0) {
+                $delayMs = $result->recommendedPullDelayMs;
+            }
+
+            if (($maxPolls !== null && $polls >= $maxPolls) || microtime(true) + $delayMs / 1000 >= $deadline) {
+                return $result;
+            }
+
+            usleep($delayMs * 1000);
         }
-
-        return new ScrapeResponse(
-            success: (bool)($data['success'] ?? false),
-            status: $data['status'] ?? null,
-            markdown: $data['markdown'] ?? null,
-            cleanedContent: $data['cleaned_content'] ?? null,
-            rawContent: $data['raw_content'] ?? null,
-            pageStatusCode: (int)($data['page_status_code'] ?? 0),
-            pageTitle: $data['page_title'] ?? null,
-            structuredData: $data['structured_data'] ?? null,
-            links: $data['links'] ?? null
-        );
     }
 }

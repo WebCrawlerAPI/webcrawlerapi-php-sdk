@@ -129,7 +129,8 @@ The test suite includes:
 
 ### SDK Usage Patterns
 
-#### Synchronous Scraping
+#### Scraping (async start + polling)
+`scrape()` calls `POST /v2/scrape?async=true`, then polls `GET /v2/scrape/{id}` using `recommendedPullDelayMs` (fallback 2s). It stops after 400 seconds and returns the last known state.
 ```php
 use WebCrawlerAPI\WebCrawlerAPI;
 use WebCrawlerAPI\Models\ScrapeRequest;

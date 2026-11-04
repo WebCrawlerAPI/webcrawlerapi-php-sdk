@@ -49,7 +49,7 @@ if ($result instanceof ScrapeResponseError) {
 }
 ```
 
-`scrape()` blocks until the result is ready. For non-blocking use there are also `scrapeAsync()` and `getScrape()`.
+`scrape()` starts an async scrape on the server and polls it until it finishes, using the server-recommended delay between polls. It gives up after 400 seconds and returns the last known state. To manage polling yourself, use `scrapeAsync()` and `getScrape()`.
 
 ### Scrape parameters
 
