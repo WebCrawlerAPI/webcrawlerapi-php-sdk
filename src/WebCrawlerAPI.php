@@ -9,6 +9,9 @@ use Psr\Http\Message\ResponseInterface;
 use WebCrawlerAPI\Exceptions\WebcrawlerApiException;
 use WebCrawlerAPI\Models\AgentRun;
 use WebCrawlerAPI\Models\AgentRunRequest;
+use WebCrawlerAPI\Models\BatchScrapeErrors;
+use WebCrawlerAPI\Models\BatchScrapeId;
+use WebCrawlerAPI\Models\BatchScrapeResponse;
 use WebCrawlerAPI\Models\Job;
 use WebCrawlerAPI\Models\CrawlResponse;
 use WebCrawlerAPI\Models\JobMarkdownResponse;
@@ -27,6 +30,7 @@ class WebCrawlerAPI
     private const AGENT_POLL_DELAY_SECONDS = 2;
     private const SCRAPE_VERSION = 'v2';
     private const SCRAPE_BASE_VERSIONED = '/v2/scrape';
+    private const BATCH_SCRAPE_BASE = '/v2/batch/scrape';
     private string $apiKey;
     private string $baseUrl;
     private string $version;
@@ -413,17 +417,35 @@ class WebCrawlerAPI
     }
 
     /**
-     * Scrapes a URL: starts an async scrape and polls until it is done or failed.
+     * Scrapes a URL, or a list of URLs, and polls until it is finished.
+     *
+     * Single URL (ScrapeRequest with a string url): starts an async scrape and polls until it is done
+     * or failed. Returns the result on "done", a ScrapeResponseError on error, and the last known
+     * (non-terminal) state if the time limit is reached.
+     *
+     * List of URLs (array of strings, or ScrapeRequest whose url is an array): creates a batch scrape,
+     * polls until it is no longer "scraping" and returns a BatchScrapeResponse with the first page of
+     * items and the `next` cursor (fetch more with getBatch()). Use scrapeBatchAsync() to get the batch
+     * id and invalid URLs. prompt and responseSchema are not supported in batches.
      *
      * Polling uses the server-recommended delay when provided (fallback: 2 seconds) and stops
-     * after 400 seconds total. Returns the result on "done", a ScrapeResponseError on error, and
-     * the last known (non-terminal) state if the time limit is reached.
+     * after 400 seconds total.
      *
+     * @param ScrapeRequest|string[] $request
      * @param int|null $maxPolls Optional extra cap on the number of polls (in addition to the 400 second limit)
+     * @return ScrapeResponse|ScrapeResponseError|BatchScrapeResponse BatchScrapeResponse for a list of URLs
      * @throws GuzzleException
+     * @throws WebcrawlerApiException
      */
-    public function scrape(ScrapeRequest $request, ?int $maxPolls = null): ScrapeResponse|ScrapeResponseError
+    public function scrape(ScrapeRequest|array $request, ?int $maxPolls = null): ScrapeResponse|ScrapeResponseError|BatchScrapeResponse
     {
+        if (is_array($request)) {
+            $request = new ScrapeRequest(url: $request);
+        }
+        if ($request->isBatch()) {
+            return $this->pollBatch($request, $maxPolls);
+        }
+
         $scrapeId = $this->scrapeAsync($request)->id;
 
         $deadline = microtime(true) + self::SCRAPE_MAX_WAIT_SECONDS;
@@ -448,5 +470,104 @@ class WebCrawlerAPI
 
             usleep($delayMs * 1000);
         }
+    }
+
+    private function pollBatch(ScrapeRequest $request, ?int $maxPolls): BatchScrapeResponse
+    {
+        $batchId = $this->scrapeBatchAsync($request)->id;
+
+        $deadline = microtime(true) + self::SCRAPE_MAX_WAIT_SECONDS;
+        $polls = 0;
+        $delayMs = self::SCRAPE_POLL_DELAY_SECONDS * 1000;
+
+        while (true) {
+            $result = $this->getBatch($batchId);
+            $polls++;
+
+            if ($result->isTerminal()) {
+                return $result;
+            }
+
+            if (($maxPolls !== null && $polls >= $maxPolls) || microtime(true) + $delayMs / 1000 >= $deadline) {
+                return $result;
+            }
+
+            usleep($delayMs * 1000);
+        }
+    }
+
+    /**
+     * Creates a batch scrape (POST /v2/batch/scrape) and returns immediately.
+     *
+     * @param ScrapeRequest|string[] $request ScrapeRequest whose url is an array, or a plain list of URLs
+     * @throws WebcrawlerApiException
+     */
+    public function scrapeBatchAsync(ScrapeRequest|array $request): BatchScrapeId
+    {
+        if (is_array($request)) {
+            $request = new ScrapeRequest(url: $request);
+        }
+        if (!$request->isBatch()) {
+            throw new WebcrawlerApiException(ErrorCode::UNKNOWN_ERROR, 'Batch scrape requires a list of URLs');
+        }
+
+        $data = $this->sendJson('POST', self::BATCH_SCRAPE_BASE, [
+            'json' => $request->toBatchPayload(),
+        ]);
+        if (!isset($data['id'])) {
+            throw new WebcrawlerApiException(ErrorCode::INVALID_RESPONSE, 'Invalid API response: missing id field');
+        }
+
+        return BatchScrapeId::fromArray($data);
+    }
+
+    /**
+     * Gets batch progress and one page of items (GET /v2/batch/scrape/:id).
+     *
+     * @param int|null $limit Items per page, 1 to 500 (API default: 100)
+     * @param string|null $cursor `next` value of the previous page
+     * @throws WebcrawlerApiException
+     */
+    public function getBatch(string $batchId, ?int $limit = null, ?string $cursor = null): BatchScrapeResponse
+    {
+        $query = [];
+        if ($limit !== null) {
+            $query['limit'] = $limit;
+        }
+        if ($cursor !== null && $cursor !== '') {
+            $query['cursor'] = $cursor;
+        }
+
+        $data = $this->sendJson('GET', self::BATCH_SCRAPE_BASE . '/' . rawurlencode($batchId), [
+            'query' => $query,
+            'headers' => [
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+            ],
+        ]);
+
+        return BatchScrapeResponse::fromArray($data);
+    }
+
+    /**
+     * Lists failed URLs of a batch and URLs blocked by robots.txt (GET /v2/batch/scrape/:id/errors).
+     *
+     * @throws WebcrawlerApiException
+     */
+    public function getBatchErrors(string $batchId): BatchScrapeErrors
+    {
+        $data = $this->sendJson('GET', self::BATCH_SCRAPE_BASE . '/' . rawurlencode($batchId) . '/errors');
+        return BatchScrapeErrors::fromArray($data);
+    }
+
+    /**
+     * Cancels a running batch (DELETE /v2/batch/scrape/:id). Items that did not start are not charged.
+     *
+     * @throws WebcrawlerApiException
+     */
+    public function cancelBatch(string $batchId): array
+    {
+        return $this->sendJson('DELETE', self::BATCH_SCRAPE_BASE . '/' . rawurlencode($batchId));
     }
 }

@@ -10,6 +10,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
+use WebCrawlerAPI\Models\BatchScrapeResponse;
 use WebCrawlerAPI\Models\CrawlResponse;
 use WebCrawlerAPI\Exceptions\WebcrawlerApiException;
 use WebCrawlerAPI\Models\Job;
@@ -442,6 +443,118 @@ class WebCrawlerAPITest extends TestCase
         $this->assertInstanceOf(ScrapeResponse::class, $result);
         $this->assertSame('in_progress', $result->status);
         $this->assertCount(3, $this->requestHistory);
+    }
+
+    public function testScrapeWithUrlListCreatesBatchAndReturnsFirstPage(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode(['id' => 'b-1', 'status_url' => 'https://x/v2/batch/scrape/b-1', 'invalid_urls' => []])),
+            new Response(200, [], json_encode([
+                'id' => 'b-1', 'status' => 'completed', 'total' => 2, 'completed' => 1, 'failed' => 1, 'canceled' => 0,
+                'data' => [
+                    ['url' => 'https://a.com/', 'status' => 'done', 'page_status_code' => 200, 'markdown_url' => 'https://d/a.md'],
+                    ['url' => 'https://b.com/', 'status' => 'error', 'error_code' => 'webpage_non_success', 'error_message' => 'bad'],
+                ],
+                'next' => 'cur',
+            ]))
+        );
+
+        $result = $this->api->scrape(new ScrapeRequest(
+            url: ['https://a.com/', 'https://b.com/'],
+            outputFormats: ['markdown'],
+            maxConcurrency: 5,
+            ignoreInvalidUrls: false,
+        ));
+
+        $this->assertInstanceOf(BatchScrapeResponse::class, $result);
+        $this->assertSame('completed', $result->status);
+        $this->assertSame('cur', $result->next);
+        $this->assertCount(2, $result->data);
+        $this->assertSame('https://d/a.md', $result->data[0]->markdownUrl);
+        $this->assertSame('webpage_non_success', $result->data[1]->errorCode);
+
+        $post = $this->requestHistory[0]['request'];
+        $this->assertSame('POST', $post->getMethod());
+        $this->assertSame('/v2/batch/scrape', $post->getUri()->getPath());
+        $this->assertSame(
+            ['urls' => ['https://a.com/', 'https://b.com/'], 'output_formats' => ['markdown'], 'max_concurrency' => 5, 'ignore_invalid_urls' => false],
+            json_decode((string)$post->getBody(), true)
+        );
+    }
+
+    public function testScrapeAcceptsPlainArrayOfUrls(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode(['id' => 'b-2'])),
+            new Response(200, [], json_encode(['id' => 'b-2', 'status' => 'failed', 'data' => []]))
+        );
+
+        $result = $this->api->scrape(['https://a.com/']);
+
+        $this->assertInstanceOf(BatchScrapeResponse::class, $result);
+        $this->assertSame('failed', $result->status);
+        $body = json_decode((string)$this->requestHistory[0]['request']->getBody(), true);
+        $this->assertSame(['urls' => ['https://a.com/']], $body);
+    }
+
+    public function testScrapeBatchStopsAtMaxPolls(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode(['id' => 'b-3'])),
+            new Response(200, [], json_encode(['id' => 'b-3', 'status' => 'scraping', 'total' => 2, 'data' => []]))
+        );
+
+        $result = $this->api->scrape(['https://a.com/', 'https://b.com/'], maxPolls: 1);
+
+        $this->assertSame('scraping', $result->status);
+        $this->assertFalse($result->isTerminal());
+        $this->assertCount(2, $this->requestHistory);
+    }
+
+    public function testScrapeBatchAsyncReturnsIdAndInvalidUrls(): void
+    {
+        $this->mockHandler->append(new Response(200, [], json_encode([
+            'id' => 'b-4',
+            'status_url' => 'https://x/v2/batch/scrape/b-4',
+            'invalid_urls' => [['url' => 'not a url', 'error_code' => 'invalid_request', 'error_message' => 'invalid url']],
+        ])));
+
+        $res = $this->api->scrapeBatchAsync(new ScrapeRequest(url: ['https://a.com/', 'not a url'], webhookUrl: 'https://hook.example/h'));
+
+        $this->assertSame('b-4', $res->id);
+        $this->assertSame('invalid_request', $res->invalidUrls[0]->errorCode);
+        $body = json_decode((string)$this->requestHistory[0]['request']->getBody(), true);
+        $this->assertSame('https://hook.example/h', $body['webhook_url']);
+    }
+
+    public function testGetBatchSendsLimitAndCursor(): void
+    {
+        $this->mockHandler->append(new Response(200, [], json_encode(['id' => 'b-5', 'status' => 'scraping', 'data' => []])));
+
+        $this->api->getBatch('b-5', 50, 'abc');
+
+        $uri = $this->requestHistory[0]['request']->getUri();
+        $this->assertSame('/v2/batch/scrape/b-5', $uri->getPath());
+        $this->assertSame('limit=50&cursor=abc', $uri->getQuery());
+    }
+
+    public function testGetBatchErrorsAndCancelBatch(): void
+    {
+        $this->mockHandler->append(
+            new Response(200, [], json_encode([
+                'errors' => [['url' => 'https://b.com/', 'error_code' => 'webpage_non_success', 'error_message' => 'bad']],
+                'robots_blocked' => ['https://c.com/'],
+            ])),
+            new Response(200, [], json_encode(['status' => 'canceled']))
+        );
+
+        $errors = $this->api->getBatchErrors('b-6');
+        $this->assertSame('https://b.com/', $errors->errors[0]->url);
+        $this->assertSame(['https://c.com/'], $errors->robotsBlocked);
+        $this->assertSame('/v2/batch/scrape/b-6/errors', $this->requestHistory[0]['request']->getUri()->getPath());
+
+        $this->assertSame(['status' => 'canceled'], $this->api->cancelBatch('b-6'));
+        $this->assertSame('DELETE', $this->requestHistory[1]['request']->getMethod());
     }
 
     public function testMarkdownWrapsNetworkError(): void

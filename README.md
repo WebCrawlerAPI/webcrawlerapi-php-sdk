@@ -69,6 +69,34 @@ if ($result instanceof ScrapeResponseError) {
 
 `ScrapeResponse` has `success`, `status`, `markdown`, `cleanedContent`, `rawContent`, `links`, `structuredData`, `pageTitle` and `pageStatusCode`. API errors are returned as a `ScrapeResponseError` with `errorCode` and `errorMessage`.
 
+## Batch scrape
+
+Pass a list of URLs to `scrape()` to scrape them as one batch. The SDK creates the batch, polls until it is no longer `scraping` and returns a `BatchScrapeResponse` with the first page of items and a `next` cursor:
+
+```php
+use WebCrawlerAPI\Models\ScrapeRequest;
+
+$batch = $client->scrape(new ScrapeRequest(
+    url: ['https://example.com/', 'https://example.com/pricing'],
+    outputFormats: ['markdown'],
+    maxConcurrency: 5,
+));
+
+echo "{$batch->status}: {$batch->completed}/{$batch->total} done, {$batch->failed} failed\n";
+foreach ($batch->data as $item) {
+    echo $item->url . ' ' . ($item->markdownUrl ?? $item->errorCode) . "\n";
+}
+
+// Fetch the next page
+if ($batch->next !== '') {
+    $page2 = $client->getBatch($batch->id, limit: 100, cursor: $batch->next);
+}
+```
+
+`scrape(['https://a.com', 'https://b.com'])` also works. Batch-only `ScrapeRequest` options: `maxConcurrency`, `ignoreInvalidUrls`. `prompt` and `responseSchema` are not supported in batches. To manage polling yourself use `scrapeBatchAsync()` (returns `id` and `invalidUrls`), `getBatch($id, $limit, $cursor)`, `getBatchErrors($id)` and `cancelBatch($id)`.
+
+Full batch documentation: [docs/batch-scrape.md](docs/batch-scrape.md).
+
 ## Crawling
 
 To crawl a whole site, use `crawl()` or `crawlAsync()`. See the [crawling guide](docs/crawling.md).
